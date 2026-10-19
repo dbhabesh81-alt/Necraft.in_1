@@ -1,0 +1,20 @@
+// Smoke test: node test.js
+const s=require('./server.js'),http=require('http'),crypto=require('crypto');
+s.listen(0,async()=>{const port=s.address().port;let ck='';
+const q=(m,p,b)=>new Promise(ok=>{const d=b?JSON.stringify(b):'';const r=http.request({port,path:p,method:m,headers:{'Content-Type':'application/json','Cookie':ck}},x=>{let t='';x.on('data',c=>t+=c);x.on('end',()=>{if(x.headers['set-cookie'])ck=x.headers['set-cookie'][0].split(';')[0];ok({c:x.statusCode,j:t?JSON.parse(t):null})})});r.end(d)});
+const a=(n,c)=>{console.log((c?'PASS ':'FAIL ')+n);if(!c)process.exitCode=1};
+const pr=(await q('GET','/api/products')).j;a('14 products',pr.length===14);
+a('admin route blocked anon',(await q('GET','/api/admin/orders')).c===401);
+a('bad login rejected',(await q('POST','/api/login',{email:'necraft.in@gmail.com',password:'x'})).c===401);
+a('admin login',(await q('POST','/api/login',{email:'necraft.in@gmail.com',password:'Nilabh124'})).c===200);
+a('admin stats',(await q('GET','/api/admin/stats')).c===200);
+await q('POST','/api/logout',{});ck='';
+a('register',(await q('POST','/api/register',{name:'T',email:'t'+Date.now()+'@x.com',password:'password1'})).c===200);
+a('user cannot admin',(await q('GET','/api/admin/orders')).c===403);
+const ad=(await q('POST','/api/addresses',{name:'T',phone:'9999999999',line:'x',city:'c',state:'s',pin:'781001'})).j;
+const o=await q('POST','/api/checkout',{items:[{id:pr[0].id,qty:1,price:1}],addressId:ad.id,method:'cod'});
+a('COD order, server price',o.c===200&&o.j.total===pr[0].price);
+a('UPI w/o keys safe',(await q('POST','/api/checkout',{items:[{id:pr[0].id,qty:1}],addressId:ad.id,method:'upi'})).c===503);
+a('fake payment verify rejected',(await q('POST','/api/payment/verify',{orderId:o.j.orderId,razorpay_order_id:'a',razorpay_payment_id:'b',razorpay_signature:'c'})).c===404);
+a('path traversal blocked',(await q('GET','/..%2f..%2fserver.js')).c!==200);
+s.close();process.exit(process.exitCode||0)});
